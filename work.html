@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>اشتغل</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@500;700;800&family=Lalezar&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header id="top"></header>
+
+<h1>اكسب نقاط</h1>
+<p class="sub">سوّي الشغلة، وبعدين خلّي أخوك الكبير يأكدها برمزه السري.</p>
+<section id="jobs"></section>
+
+<h1>لعبة النجوم ⭐</h1>
+<p class="sub">عندك 15 ثانية. كل نجمة تمسكها = نقطة (أقصى شي 15). تنلعب مرة كل 10 دقايق.</p>
+<button class="go" id="start">ابدأ اللعب</button>
+<span id="info"></span>
+<div id="arena" aria-label="ساحة اللعبة"></div>
+<div id="toast" role="status"></div>
+
+<script src="products.js"></script>
+<script src="app.js"></script>
+<script>
+topbar("work");
+const jobs = document.getElementById("jobs");
+JOBS.forEach(j => {
+  const d = document.createElement("div"); d.className = "job";
+  d.innerHTML = `<span class="e">${j.emoji}</span><span class="t">${j.name}</span>
+    <span class="r">+${j.reward}</span><button>خلصتها</button>`;
+  d.querySelector("button").onclick = () => {
+    const pin = prompt("رمز الأخ الكبير للتأكيد:");
+    if (pin === null) return;
+    if (pin !== CONFIG.pin) return toast("الرمز غلط ❌");
+    addBal(j.reward); toast(`+${j.reward} ${CONFIG.coin} 🎉`);
+  };
+  jobs.appendChild(d);
+});
+
+// لعبة النجوم
+const arena = document.getElementById("arena"), info = document.getElementById("info");
+const LAST = "toyshop_lastgame";
+let score = 0, running = false;
+function lastPlay() { try { return +localStorage.getItem(LAST) || 0; } catch (e) { return 0; } }
+document.getElementById("start").onclick = () => {
+  if (running) return;
+  const wait = 600000 - (Date.now() - lastPlay());
+  if (wait > 0) return toast(`ارتاح شوي، باقي ${Math.ceil(wait / 60000)} دقيقة`);
+  running = true; score = 0; let t = 15;
+  const spawn = setInterval(() => {
+    const s = document.createElement("button"); s.className = "star"; s.textContent = "⭐";
+    s.setAttribute("aria-label", "نجمة");
+    s.style.left = Math.random() * (arena.clientWidth - 50) + "px";
+    s.style.top = Math.random() * (arena.clientHeight - 50) + "px";
+    s.onclick = () => { score++; s.remove(); info.textContent = ` ⭐ ${score} | ⏱️ ${t}`; };
+    arena.appendChild(s); setTimeout(() => s.remove(), 1100);
+  }, 650);
+  const clock = setInterval(() => {
+    t--; info.textContent = ` ⭐ ${score} | ⏱️ ${t}`;
+    if (t <= 0) {
+      clearInterval(spawn); clearInterval(clock); running = false; arena.innerHTML = "";
+      const win = Math.min(score, 15); addBal(win);
+      try { localStorage.setItem(LAST, String(Date.now())); } catch (e) {}
+      toast(`كسبت ${win} ${CONFIG.coin} 🎉`);
+    }
+  }, 1000);
+};
+</script>
+</body>
+</html>
