@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex"><title>الإدارة | SuperShop</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@500;700;800&family=Lalezar&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head><body>
+<header id="top"><span class="brand" id="ob"></span><span><a class="btn" href="orders.html">الطلبات</a> <button id="out" hidden>خروج</button></span></header>
+<main id="login" class="box" style="margin:30px auto"><h2>دخول المالك</h2>
+ <input id="em" type="email" dir="ltr" placeholder="الإيميل"><input id="pw" type="password" dir="ltr" placeholder="الباسورد"><button class="go" id="in">دخول</button></main>
+<main id="app" hidden>
+ <div style="display:flex;gap:8px;margin:10px 0"><button class="go" data-t="pr">المنتجات</button><button data-t="of">عروض البيع</button><button data-t="lg">السجل</button></div>
+ <section id="pr">
+  <div class="order">
+   <input id="pn" placeholder="اسم المنتج"><input id="pp" type="number" min="0" step="0.25" placeholder="السعر ($)">
+   <select id="pi"></select> <select id="pc"><option value="">بدون حالة</option><option value="new">جديد</option><option value="used">مستعمل</option></select>
+   <button class="go" id="add">أضف المنتج</button> <button id="seed">انسخ المنتجات الافتراضية</button>
+  </div><div id="plist"></div></section>
+ <section id="of" hidden><div id="olist"></div></section>
+ <section id="lg" hidden><div id="tot" class="order"></div><div id="llist"></div></section>
+</main>
+<div id="toast" role="status"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="products.js"></script><script src="supabase-compat.js"></script><script src="app.js"></script>
+<script>
+ob.innerHTML = ico("bolt", 26) + "الإدارة";
+if (!db) toast("تعذر الاتصال بسوبابيس", 1);
+const C = n => db.collection(n);
+pi.innerHTML = Object.keys(P).map(k => `<option>${k}</option>`).join(""); pi.value = "tag";
+document.querySelectorAll("[data-t]").forEach(b => b.onclick = () => {
+  ["pr", "of", "lg"].forEach(k => document.getElementById(k).hidden = k != b.dataset.t);
+  document.querySelectorAll("[data-t]").forEach(x => x.className = x == b ? "go" : "");
+});
+in.onclick = () => auth.signInWithEmailAndPassword(em.value, pw.value).catch(() => toast("بيانات الدخول غلط", 1));
+out.onclick = () => auth.signOut();
+const row = (h) => { const e = document.createElement("div"); e.className = "order"; e.innerHTML = h; return e; };
+let un = [], ORD = [], OFF = [];
+auth && auth.onAuthStateChanged(u => {
+  login.hidden = !!u; app.hidden = !u; out.hidden = !u; un.forEach(f => f()); un = [];
+  if (!u) return;
+  un.push(C("products").orderBy("ts", "desc").onSnapshot(s => {
+    plist.innerHTML = s.empty ? "<p class='sub'>ما في منتجات بالقاعدة، المحل يعرض الافتراضية.</p>" : "";
+    s.forEach(d => { const o = d.data(), e = row(`<div class="row"><b>${ico(o.icon || "tag")} ${o.name} ${o.cond ? "(" + (o.cond == "used" ? "مستعمل" : "جديد") + ")" : ""}</b><span>${fmt(o.price * 100)}</span>
+      <span><button data-e>السعر</button> <button class="pink" data-d>حذف</button></span></div>`);
+      e.querySelector("[data-e]").onclick = () => { const v = parseFloat(prompt("السعر الجديد ($)", o.price)); if (v >= 0) d.ref.update({ price: v }); };
+      e.querySelector("[data-d]").onclick = () => confirm("حذف " + o.name + "؟") && d.ref.delete();
+      plist.appendChild(e); });
+  }));
+  un.push(C("offers").orderBy("ts", "desc").onSnapshot(s => {
+    OFF = s.docs; olist.innerHTML = s.empty ? "<p class='sub'>ما في عروض.</p>" : "";
+    s.forEach(d => { const o = d.data(), pend = o.status == "pending";
+      const e = row(`<div class="row"><b>${o.name} (${o.cond == "used" ? "مستعمل" : "جديد"})</b><span class="chip ${pend ? "s-new" : o.status == "accepted" ? "s-done" : "s-del"}">${pend ? "جديد" : o.status == "accepted" ? "مشتري" : "مرفوض"}</span></div>
+       <div>من ${o.owner} بسعر ${fmt(o.price * 100)} ${o.note ? "— " + o.note : ""}</div>${pend ? `<div class="row"><button class="go" data-y>اشتريه</button><button class="pink" data-n>ارفض</button></div>` : ""}`);
+      if (pend) {
+        e.querySelector("[data-n]").onclick = () => d.ref.update({ status: "rejected" });
+        e.querySelector("[data-y]").onclick = () => {
+          const buy = parseFloat(prompt("بكم تشتريه منه؟ ($)", o.price)); if (!(buy >= 0)) return;
+          const sell = parseFloat(prompt("وبكم تعرضه بالمحل؟ ($)", Math.ceil(buy * 1.3 * 4) / 4)); if (!(sell > 0)) return;
+          d.ref.update({ status: "accepted", buy, ts2: Date.now() });
+          C("products").add({ name: o.name, price: sell, icon: "tag", cond: o.cond, ts: Date.now() }); sfx.ok();
+        };
+      }
+      olist.appendChild(e); });
+    log();
+  }));
+  un.push(C("orders").orderBy("ts", "desc").onSnapshot(s => { ORD = s.docs.map(d => d.data()); log(); }));
+});
+function log() {
+  const rows = [...ORD.map(o => ({ ts: o.ts, sale: 1, who: o.name, txt: o.items.map(i => i.n + " ×" + i.q).join("، "), amt: o.total })),
+    ...OFF.map(d => d.data()).filter(o => o.status == "accepted").map(o => ({ ts: o.ts2 || o.ts, sale: 0, who: o.owner, txt: o.name, amt: o.buy }))].sort((a, b) => b.ts - a.ts);
+  const sv = rows.filter(r => r.sale).reduce((s, r) => s + r.amt, 0), bv = rows.filter(r => !r.sale).reduce((s, r) => s + r.amt, 0);
+  tot.innerHTML = `<div class="row"><span>مبيعات: <b>${fmt(sv * 100)}</b></span><span>مشتريات: <b>${fmt(bv * 100)}</b></span><span>الفرق: <b>${fmt((sv - bv) * 100)}</b></span></div>`;
+  llist.innerHTML = ""; rows.forEach(r => llist.appendChild(row(`<div class="row"><b>${r.sale ? "بعت لـ" : "اشتريت من"} ${r.who}</b><span class="chip ${r.sale ? "s-done" : "s-new"}">${r.sale ? "بيع" : "شراء"}</span></div>
+   <div>${r.txt}</div><div class="row"><span class="date">${new Date(r.ts).toLocaleString("ar-IQ")}</span><b>${fmt(r.amt * 100)}</b></div>`)));
+}
+add.onclick = () => {
+  const price = parseFloat(pp.value); if (!pn.value.trim() || !(price >= 0)) return toast("اكتب الاسم والسعر", 1);
+  C("products").add({ name: pn.value.trim(), price, icon: pi.value, cond: pc.value, ts: Date.now() }).then(() => { pn.value = pp.value = ""; sfx.ok(); });
+};
+seed.onclick = () => PRODUCTS.forEach((p, i) => C("products").add({ name: p.name, price: p.price, icon: p.icon, cond: "", ts: Date.now() - i })).length;
+</script></body></html>

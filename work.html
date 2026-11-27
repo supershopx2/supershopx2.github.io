@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>العمل | SuperShop</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@500;700;800&family=Lalezar&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+.work-wrap{width:min(900px,100%);margin:22px auto}
+.work-hero{background:linear-gradient(130deg,#eaf2ff,#fff 65%);border:1px solid #dbe7fb;border-radius:22px;padding:24px;display:grid;grid-template-columns:1fr auto;gap:18px;align-items:center;box-shadow:0 8px 28px rgba(30,52,90,.06)}
+.work-hero h2{margin:0 0 6px;color:#1d4ed8}.work-hero p{margin:0;color:#68758a}
+.work-icon{width:82px;height:82px;border-radius:22px;background:#dce9ff;color:#2563eb;display:grid;place-items:center}
+.work-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:16px 0}
+.work-stat{background:#fff;border:1px solid #e3e9f2;border-radius:16px;padding:15px;text-align:center;box-shadow:0 5px 16px rgba(30,52,90,.04)}
+.work-stat small{display:block;color:#6b7689;margin-bottom:4px}.work-stat strong{font-size:1.25rem;color:#1d4ed8}
+.work-task{background:#fff;border:1px solid #e3e9f2;border-radius:18px;padding:20px;box-shadow:0 8px 28px rgba(30,52,90,.06)}
+.work-task h3{margin:0 0 5px}.work-task p{color:#6b7689;margin:0 0 15px}.work-task button{width:100%;font-size:1.05rem;padding:13px}
+.work-progress{height:10px;border-radius:99px;background:#e9eef6;overflow:hidden;margin:12px 0 6px}.work-progress>span{display:block;height:100%;width:0;background:linear-gradient(90deg,#60a5fa,#2563eb);border-radius:99px;transition:width .25s}
+.work-note{background:#f8fafc;border:1px dashed #d7e1ef;border-radius:14px;padding:12px;color:#64748b;font-size:.9rem;margin-top:14px}
+@media(max-width:600px){.work-hero{padding:17px;grid-template-columns:1fr}.work-icon{width:60px;height:60px}.work-stats{gap:7px}.work-stat{padding:10px 6px}.work-stat strong{font-size:1.05rem}}
+</style>
+</head>
+<body>
+<header id="top"></header>
+<h1>وقت الشغل 💻</h1>
+<p class="sub">أنجز مهام بسيطة داخل SuperShop واكسب رصيد تقدر تشتري به من المحل.</p>
+<main class="work-wrap">
+ <section class="work-hero">
+  <div><h2>مكتب العمل</h2><p>كل مهمة تكملها تضيف رصيد لحسابك، لحد سقف الربح اليومي.</p></div>
+  <div class="work-icon" aria-hidden="true"><svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 22h8M12 18v4M7 8h10M7 11h6"/></svg></div>
+ </section>
+ <div class="work-stats">
+  <div class="work-stat"><small>رصيدك الحالي</small><strong id="balance">$0.00</strong></div>
+  <div class="work-stat"><small>ربح اليوم</small><strong id="earned">$0.00</strong></div>
+  <div class="work-stat"><small>المتبقي اليوم</small><strong id="left">$0.00</strong></div>
+ </div>
+ <section class="work-task">
+  <h3>مهمة اليوم</h3><p>اضغط إنجاز مهمة لتحصل على <b id="reward">$0.25</b>، والمكافأة محدودة بسقف اليوم.</p>
+  <div class="work-progress" aria-label="تقدم الربح اليومي"><span id="progress"></span></div><small id="progressText"></small>
+  <button class="go" id="taskBtn">إنجاز مهمة +$0.25</button>
+  <div class="work-note">سقف الربح اليومي مضبوط من CONFIG.dailyCap داخل products.js. تقدم اليوم محفوظ على نفس الجهاز والمتصفح.</div>
+ </section>
+</main>
+<div id="toast" role="status"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="products.js"></script><script src="supabase-compat.js"></script><script src="app.js"></script>
+<script>
+topbar("work");
+const REWARD = 25; // cents per task
+const dayKey = () => new Date().toISOString().slice(0,10);
+const readToday = () => { const saved = JSON.parse(ls("ss_work_day") || "{}"); return saved.day === dayKey() ? (saved.earned || 0) : 0; };
+const cap = Math.max(0, Math.round((Number(CONFIG.dailyCap) || 0) * 100));
+function updateWork(){
+ const earned = readToday(), left = Math.max(0, cap-earned);
+ document.getElementById("balance").textContent=fmt(getBal());
+ document.getElementById("earned").textContent=fmt(earned);
+ document.getElementById("left").textContent=fmt(left);
+ document.getElementById("progress").style.width=(cap ? Math.min(100,earned/cap*100):100)+"%";
+ document.getElementById("progressText").textContent=`${fmt(earned)} من ${fmt(cap)} اليوم`;
+ const btn=document.getElementById("taskBtn"); btn.disabled=left<=0;
+ btn.textContent=left<=0?"وصلت سقف الربح اليومي":"إنجاز مهمة +$0.25";
+}
+document.getElementById("taskBtn").onclick=()=>{
+ const earned=readToday(), left=Math.max(0,cap-earned), amount=Math.min(REWARD,left);
+ if(amount<=0){toast("وصلت سقف الربح اليومي",1);updateWork();return;}
+ addBal(amount);
+ ls("ss_work_day",JSON.stringify({day:dayKey(),earned:earned+amount}));
+ sfx.coin(); toast(`ممتاز! انضاف ${fmt(amount)} لرصيدك`); updateWork();
+};
+updateWork();
+</script>
+</body>
+</html>

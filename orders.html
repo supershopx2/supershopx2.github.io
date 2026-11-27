@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex"><title>الطلبات | SuperShop</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@500;700;800&family=Lalezar&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head><body>
+<header id="top"><span class="brand" id="ob"></span><span><a class="btn" href="admin.html">الإدارة</a> <button id="out" hidden>خروج</button></span></header>
+<main id="login" class="box" style="margin:30px auto"><h2>دخول المالك</h2>
+ <input id="em" type="email" dir="ltr" placeholder="الإيميل"><input id="pw" type="password" dir="ltr" placeholder="الباسورد">
+ <button class="go" id="in">دخول</button></main>
+<main id="app" hidden>
+ <h1>الطلبات</h1><section id="list"></section>
+ <h1>بطاقات الشحن</h1><p class="sub">سوّي بطاقة بمبلغ وعطيها لأخوك، يدخل رمزها بمحفظته.</p>
+ <div style="display:flex;gap:8px"><input id="amt" type="number" min="0.25" step="0.25" value="5" style="margin:0"><button class="go" id="mk">سوّي بطاقة</button></div>
+ <div class="codes" id="codes"></div>
+</main>
+<div id="toast" role="status"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="products.js"></script><script src="supabase-compat.js"></script><script src="app.js"></script>
+<script>
+ob.innerHTML = ico("bolt", 26) + CONFIG.shopName;
+if (!db) toast("تعذر الاتصال بسوبابيس", 1);
+const ST = { new: ["جديد", "s-new"], del: ["بالطريق", "s-del"], done: ["انوصّل", "s-done"] };
+const NEXT = { new: "del", del: "done" };
+in.onclick = () => auth.signInWithEmailAndPassword(em.value, pw.value).catch(() => toast("بيانات الدخول غلط", 1));
+out.onclick = () => auth.signOut();
+let unsub = [], first = true;
+auth && auth.onAuthStateChanged(u => {
+  login.hidden = !!u; app.hidden = !u; out.hidden = !u; unsub.forEach(f => f()); unsub = []; first = true;
+  if (!u) return;
+  unsub.push(db.collection("orders").orderBy("ts", "desc").onSnapshot(s => {
+    if (!first) s.docChanges().forEach(c => { if (c.type === "added") { sfx.ok(); toast("طلب جديد من " + c.doc.data().name); } });
+    first = false;
+    list.innerHTML = s.empty ? "<p class='sub'>ما في طلبات للحين.</p>" : "";
+    s.forEach(d => {
+      const o = d.data(), [lb, cl] = ST[o.status], n = NEXT[o.status], el = document.createElement("div"); el.className = "order";
+      el.innerHTML = `<div class="row"><h2>${o.name}</h2><span class="chip ${cl}">${lb}</span></div>
+       <div class="date">${new Date(o.ts).toLocaleString("ar-IQ")}</div>
+       <ul>${o.items.map(i => `<li>${i.n} × ${i.q}</li>`).join("")}</ul>
+       <div class="row"><b>${fmt(o.total * 100)}</b>${n ? `<button class="go">${ico("truck", 20)}${n == "del" ? "طلعت للتوصيل" : "تم التوصيل"}</button>` : ico("check", 24)}</div>`;
+      if (n) el.querySelector("button").onclick = () => d.ref.update({ status: n });
+      list.appendChild(el);
+    });
+  }));
+  unsub.push(db.collection("cards").where("used", "==", false).onSnapshot(s => {
+    codes.innerHTML = ""; s.forEach(d => { const e = document.createElement("span"); e.textContent = `${d.id} = ${fmt(d.data().amount * 100)}`; codes.appendChild(e); });
+  }));
+});
+mk.onclick = () => {
+  const a = parseFloat(amt.value); if (!(a > 0)) return toast("اكتب مبلغ صحيح", 1);
+  const A = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let c = ""; for (let i = 0; i < 8; i++) c += A[Math.random() * A.length | 0];
+  db.collection("cards").doc(c).set({ amount: a, used: false, ts: Date.now() }).then(() => { sfx.ok(); toast("البطاقة: " + c); });
+};
+</script></body></html>
